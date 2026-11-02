@@ -22,6 +22,19 @@ export type StatsQueryInput = {
   sessionId?: string;
 };
 
+export type ErrorsQueryInput = {
+  appId: string;
+  buildMode?: BuildMode;
+  period?: Period;
+  startDate?: string;
+  endDate?: string;
+  osName?: string;
+  errorType?: string;
+  severity?: string;
+  offset?: number;
+  limit?: number;
+};
+
 export type AptabaseConfig = {
   baseUrl: string;
   authSession: string;
@@ -147,11 +160,67 @@ export class AptabaseClient {
     });
   }
 
-  async getHistoricalSessions(input: StatsQueryInput): Promise<unknown> {
+  /**
+   * Sessions that started before `date` (newest first, page size is fixed by Aptabase).
+   * Pass the last returned `startedAt` as `date` to fetch the next page.
+   */
+  async getHistoricalSessions(
+    input: StatsQueryInput & { date?: string },
+  ): Promise<unknown> {
+    const params = this.toQueryParams(input);
+    return this.get("/api/_stats/historical-sessions", {
+      ...params,
+      date: input.date ?? params.endDate ?? new Date().toISOString(),
+    });
+  }
+
+  /** Errors reported by the SDKs (dashboard "Errors" page, newest first). */
+  async getErrors(input: ErrorsQueryInput): Promise<unknown> {
+    return this.get(`/api/v0/apps/${encodeURIComponent(input.appId)}/errors`, {
+      ...this.toErrorRangeParams(input),
+      offset: String(input.offset ?? 0),
+      limit: String(input.limit ?? 20),
+      osName: input.osName,
+      errorType: input.errorType,
+      severity: input.severity,
+    });
+  }
+
+  /** Error types with occurrence counts for the period. */
+  async getErrorTypes(input: ErrorsQueryInput): Promise<unknown> {
     return this.get(
-      "/api/_stats/historical-sessions",
-      this.toQueryParams(input),
+      `/api/v0/apps/${encodeURIComponent(input.appId)}/errors/types`,
+      this.toErrorRangeParams(input),
     );
+  }
+
+  /** Single error incl. stack trace and the sessionId it occurred in. */
+  async getErrorDetails(input: {
+    appId: string;
+    errorId: string;
+    buildMode?: BuildMode;
+  }): Promise<unknown> {
+    return this.get(
+      `/api/v0/apps/${encodeURIComponent(input.appId)}/errors/${encodeURIComponent(input.errorId)}`,
+      { buildMode: input.buildMode ?? "release" },
+    );
+  }
+
+  private toErrorRangeParams(
+    input: ErrorsQueryInput,
+  ): Record<string, string | undefined> {
+    let startDate = input.startDate;
+    let endDate = input.endDate;
+    if (input.period) {
+      const resolved = resolvePeriod(input.period);
+      startDate = resolved.startDate;
+      endDate = resolved.endDate;
+    }
+    return {
+      buildMode: input.buildMode ?? "release",
+      startDate,
+      endDate,
+    };
   }
 
   async getMonthlyUsage(input: {
