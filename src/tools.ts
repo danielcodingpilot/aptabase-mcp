@@ -324,13 +324,18 @@ export function registerTools(server: McpServer, client: AptabaseClient): void {
   server.registerTool(
     "get_historical_sessions",
     {
-      description: "Historical sessions for an app over a period, with optional filters.",
+      description:
+        "Historical sessions for an app, newest first, with optional filters. Returns sessions that started before `date` (default: end of the period); page back by passing the last session's startedAt as `date`.",
       inputSchema: {
         ...statsFilters,
         sessionId: z
           .string()
           .optional()
           .describe("Optional session id to narrow results"),
+        date: z
+          .string()
+          .optional()
+          .describe("ISO datetime; only sessions started before it are returned (for paging)"),
       },
     },
     async (args) => {

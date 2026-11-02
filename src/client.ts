@@ -147,11 +147,18 @@ export class AptabaseClient {
     });
   }
 
-  async getHistoricalSessions(input: StatsQueryInput): Promise<unknown> {
-    return this.get(
-      "/api/_stats/historical-sessions",
-      this.toQueryParams(input),
-    );
+  /**
+   * Sessions that started before `date` (newest first, fixed page size).
+   * Pass the last returned `startedAt` as `date` to fetch the next page.
+   */
+  async getHistoricalSessions(
+    input: StatsQueryInput & { date?: string },
+  ): Promise<unknown> {
+    const params = this.toQueryParams(input);
+    return this.get("/api/_stats/historical-sessions", {
+      ...params,
+      date: input.date ?? params.endDate ?? new Date().toISOString(),
+    });
   }
 
   async getMonthlyUsage(input: {
